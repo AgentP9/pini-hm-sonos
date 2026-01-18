@@ -313,11 +313,7 @@ if {[info exists args(action)]} {
       previous -
       settrack -
       rewind -
-      stop -
-      stop -
       toggle -
-      volumedown -
-      volumedown -
       udp -
       info {
          if {[info exists args(info)]} {
