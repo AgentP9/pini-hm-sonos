@@ -268,8 +268,13 @@ proc loadVolumeCache {} {
       if { $line != "" && ![string match "#*" $line] } {
         if { [llength $line] == 3 } {
           lassign $line ip timestamp volume
-          set volumeCache($ip,timestamp) $timestamp
-          set volumeCache($ip,volume) $volume
+          # Validate data types to prevent corrupt cache data
+          if { [string is integer -strict $timestamp] && 
+               [string is integer -strict $volume] && 
+               $volume >= 0 && $volume <= 100 } {
+            set volumeCache($ip,timestamp) $timestamp
+            set volumeCache($ip,volume) $volume
+          }
         }
       }
     }
@@ -280,7 +285,7 @@ proc saveVolumeCache {} {
   variable fvolumecache
   global volumeCache
   set fd -1
-  catch {
+  if { [catch {
     set fd [open $fvolumecache w]
     if { $fd > -1 } {
       fconfigure $fd -encoding utf-8
@@ -292,8 +297,14 @@ proc saveVolumeCache {} {
           puts $fd "$ip $volumeCache($ip,timestamp) $volumeCache($ip,volume)"
         }
       }
-      close $fd
     }
+  } err] } {
+    # Log error but don't fail the operation
+    catch { log "Error saving volume cache: $err" }
+  }
+  # Ensure file descriptor is closed even on error
+  if { $fd > -1 } {
+    catch { close $fd }
   }
 }
 
@@ -305,7 +316,9 @@ proc getCachedVolume {ip {maxAge 300}} {
   set now [clock seconds]
   set age [expr {$now - $volumeCache($ip,timestamp)}]
   if { $age >= $maxAge } {
-    # Cache expired
+    # Cache expired - clean up expired entries to prevent memory accumulation
+    catch { unset volumeCache($ip,volume) }
+    catch { unset volumeCache($ip,timestamp) }
     return ""
   }
   return $volumeCache($ip,volume)
