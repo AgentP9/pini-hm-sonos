@@ -1880,7 +1880,12 @@ proc GetVolume {{array "sonosArray"}} {
   set xml "<InstanceID>0</InstanceID><Channel>Master</Channel>"
   set response [getResponse /MediaRenderer/RenderingControl GetVolume $array $xml]
   if {[string match -nocase {HTTP/1.1 200 OK*} $response]} {
-    return [Xml::getXmlValue $response CurrentVolume]
+    set volume [Xml::getXmlValue $response CurrentVolume]
+    # Cache the retrieved volume to prevent stale reads
+    if {[string is integer -strict $volume] && $volume >= 0 && $volume <= 100} {
+      sonosSet Volume $volume $array
+    }
+    return $volume
   } else {
     return "GetVolume mit Fehler beendet" 
   }
@@ -1932,6 +1937,10 @@ proc VolumeUp {{array "sonosArray"}} {
   if { $volume == "" } {
     set volume [GetVolume $array]
   }
+  # Validate that volume is a valid number, default to 0 if not
+  if { ![string is integer -strict $volume] || $volume < 0 || $volume > 100 } {
+    set volume 0
+  }
   if { $volume < [expr {100 - $Cfg::volumeup}] } {
     set volume [expr {$volume + $Cfg::volumeup}]
   } {
@@ -1950,6 +1959,10 @@ proc VolumeDown {{array "sonosArray"}} {
   set volume [sonosGet Volume $array]
   if { $volume == "" } {
     set volume [GetVolume $array]
+  }
+  # Validate that volume is a valid number, default to 0 if not
+  if { ![string is integer -strict $volume] || $volume < 0 || $volume > 100 } {
+    set volume 0
   }
   if { $volume > [expr {$Cfg::volumedown}] } {
     set volume [expr {$volume - $Cfg::volumedown}]
