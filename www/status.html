@@ -223,13 +223,14 @@ function setSonos(udp) {
         }
         
         const id = sonosArray[i].replace(/\./g, "_");
+        const rowspanValue = Math.floor(l / 2);
         
         if (i === 1) {
             text += '<tr>' +
                 '<td class="' + bgclass + '" id="' + id + '" onclick="col1Click(this);" width="33%">' + 
                 name + '</td>' +
-                '<td id="col2" width="33%" rowspan="' + (l/2) + '" class="bg-primary"></td>' +
-                '<td width="33%" rowspan="' + (l/2) + '" class="bg-primary" id="col3"></td>' +
+                '<td id="col2" width="33%" rowspan="' + rowspanValue + '" class="bg-primary"></td>' +
+                '<td width="33%" rowspan="' + rowspanValue + '" class="bg-primary" id="col3"></td>' +
                 '</tr>';
         } else {
             text += '<tr>' +
@@ -271,7 +272,7 @@ function log(text, ...args) {
 // ========================================
 
 $(window).on('beforeunload', function() {
-    log("Session ending");
+    log("Dies ist das Ende!");
     return;
 });
 
