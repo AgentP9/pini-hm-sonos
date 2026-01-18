@@ -1862,10 +1862,11 @@ proc SetVolume {volume {array "sonosArray"}} {
   } {
     set volume [sonosGet Volume $array]
   }
+  # Update cache immediately before API call to prevent race conditions
+  sonosSet Volume $volume $array
   set xml "<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredVolume>$volume</DesiredVolume>"
   set response [getResponse /MediaRenderer/RenderingControl SetVolume $array $xml]
   if {[string match -nocase {HTTP/1.1 200 OK*} $response]} {
-    sonosSet Volume $volume $array]
     return "SetVolume to $volume okay" 
   } else {
     return "SetVolume mit Fehler beendet" 
@@ -1926,12 +1927,18 @@ proc VolumeUp {{array "sonosArray"}} {
   if { $mute == "1"} {
     puts [SetMute 0 $array]
   }
-  set volume [GetVolume $array]
+  # Try to get cached volume first, fall back to GetVolume if not available
+  set volume [sonosGet Volume $array]
+  if { $volume == "" } {
+    set volume [GetVolume $array]
+  }
   if { $volume < [expr {100 - $Cfg::volumeup}] } {
     set volume [expr {$volume + $Cfg::volumeup}]
   } {
     set volume 100
   }
+  # Update cache immediately to prevent race conditions
+  sonosSet Volume $volume $array
   SetVolume $volume $array
 }
 proc VolumeDown {{array "sonosArray"}} {
@@ -1939,12 +1946,18 @@ proc VolumeDown {{array "sonosArray"}} {
   if { $mute == "1"} {
     puts [SetMute 0 $array]
   }
-  set volume [GetVolume $array]
+  # Try to get cached volume first, fall back to GetVolume if not available
+  set volume [sonosGet Volume $array]
+  if { $volume == "" } {
+    set volume [GetVolume $array]
+  }
   if { $volume > [expr {$Cfg::volumedown}] } {
     set volume [expr {$volume - $Cfg::volumedown}]
   } {
     set volume 0
   }
+  # Update cache immediately to prevent race conditions
+  sonosSet Volume $volume $array
   SetVolume $volume $array
 }
 
