@@ -304,7 +304,7 @@ proc getCachedVolume {ip {maxAge 300}} {
   }
   set now [clock seconds]
   set age [expr {$now - $volumeCache($ip,timestamp)}]
-  if { $age > $maxAge } {
+  if { $age >= $maxAge } {
     # Cache expired
     return ""
   }
@@ -2064,14 +2064,6 @@ proc VolumeDown {{array "sonosArray"}} {
     set volume 0
   }
   # SetVolume will update both in-memory and persistent cache
-  SetVolume $volume $array
-}
-    set volume [expr {$volume - $Cfg::volumedown}]
-  } {
-    set volume 0
-  }
-  # Update cache immediately to prevent race conditions
-  sonosSet Volume $volume $array
   SetVolume $volume $array
 }
 
