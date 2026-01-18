@@ -223,6 +223,7 @@ function setSonos(udp) {
         }
         
         const id = sonosArray[i].replace(/\./g, "_");
+        // Calculate rowspan for merged cells (array contains name-IP pairs, so divide by 2)
         const rowspanValue = Math.floor(l / 2);
         
         if (i === 1) {
