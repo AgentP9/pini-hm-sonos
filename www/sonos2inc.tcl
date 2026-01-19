@@ -1921,31 +1921,132 @@ proc GetMute { {array "sonosArray"}} {
 
 }
 
+#/**
+# * Acquires a lock for volume operations to prevent race conditions
+# * Uses a simple atomic file creation approach compatible with TCL 8.2+
+# * @param array - the sonos array (default "sonosArray")
+# * @param timeout - timeout in milliseconds (default 5000)
+# * @return 1 if lock acquired, 0 on timeout
+proc acquireVolumeLock {{array "sonosArray"} {timeout 5000}} {
+  set ip [sonosGet IP $array]
+  if {$ip == ""} {
+    return 0
+  }
+  # Create lock file name based on IP to allow concurrent access to different players
+  set lockfile "/tmp/sonos2_volume_[string map {. _} $ip].lock"
+  
+  set start [clock clicks -milliseconds]
+  
+  # Try to acquire lock with timeout using file operations
+  while {[expr {[clock clicks -milliseconds] - $start}] < $timeout} {
+    # Check for stale locks first (older than 10 seconds)
+    if {[file exists $lockfile]} {
+      if {[catch {
+        set mtime [file mtime $lockfile]
+        if {[expr {[clock seconds] - $mtime}] > 10} {
+          # Stale lock, remove it
+          file delete -force $lockfile
+        }
+      }]} {
+        # Error checking file, try to delete anyway
+        catch {file delete -force $lockfile}
+      }
+    }
+    
+    # Try to create lock file if it doesn't exist
+    if {![file exists $lockfile]} {
+      # Attempt to create the lock file
+      set created 0
+      if {[catch {
+        set fd [open $lockfile w]
+        puts $fd "[pid] [clock seconds]"
+        close $fd
+        set created 1
+      }] == 0 && $created} {
+        # Successfully created lock file, verify it still exists
+        after 10
+        if {[file exists $lockfile]} {
+          return 1
+        }
+      }
+    }
+    
+    # Wait a bit before retry (50ms)
+    after 50
+  }
+  
+  # Timeout reached
+  return 0
+}
+
+#/**
+# * Releases a volume lock
+# * @param array - the sonos array (default "sonosArray")
+proc releaseVolumeLock {{array "sonosArray"}} {
+  set ip [sonosGet IP $array]
+  if {$ip != ""} {
+    set lockfile "/tmp/sonos2_volume_[string map {. _} $ip].lock"
+    catch {file delete -force $lockfile}
+  }
+}
+
 proc VolumeUp {{array "sonosArray"}} {
-  set mute [GetMute $array]
-  if { $mute == "1"} {
-    puts [SetMute 0 $array]
+  # Acquire lock before volume operation to prevent race conditions
+  if {![acquireVolumeLock $array]} {
+    # Failed to acquire lock, log and continue anyway to not block user
+    catch {log "VolumeUp: Failed to acquire lock for [sonosGet IP $array]"}
   }
-  set volume [GetVolume $array]
-  if { $volume < [expr {100 - $Cfg::volumeup}] } {
-    set volume [expr {$volume + $Cfg::volumeup}]
-  } {
-    set volume 100
+  
+  # Ensure lock is released even if an error occurs
+  if {[catch {
+    set mute [GetMute $array]
+    if { $mute == "1"} {
+      puts [SetMute 0 $array]
+    }
+    set volume [GetVolume $array]
+    if { $volume < [expr {100 - $Cfg::volumeup}] } {
+      set volume [expr {$volume + $Cfg::volumeup}]
+    } {
+      set volume 100
+    }
+    SetVolume $volume $array
+  } err]} {
+    # Release lock before re-throwing error
+    releaseVolumeLock $array
+    error $err
   }
-  SetVolume $volume $array
+  
+  # Release lock after successful operation
+  releaseVolumeLock $array
 }
 proc VolumeDown {{array "sonosArray"}} {
-  set mute [GetMute $array]
-  if { $mute == "1"} {
-    puts [SetMute 0 $array]
+  # Acquire lock before volume operation to prevent race conditions
+  if {![acquireVolumeLock $array]} {
+    # Failed to acquire lock, log and continue anyway to not block user
+    catch {log "VolumeDown: Failed to acquire lock for [sonosGet IP $array]"}
   }
-  set volume [GetVolume $array]
-  if { $volume > [expr {$Cfg::volumedown}] } {
-    set volume [expr {$volume - $Cfg::volumedown}]
-  } {
-    set volume 0
+  
+  # Ensure lock is released even if an error occurs
+  if {[catch {
+    set mute [GetMute $array]
+    if { $mute == "1"} {
+      puts [SetMute 0 $array]
+    }
+    set volume [GetVolume $array]
+    if { $volume > [expr {$Cfg::volumedown}] } {
+      set volume [expr {$volume - $Cfg::volumedown}]
+    } {
+      set volume 0
+    }
+    SetVolume $volume $array
+  } err]} {
+    # Release lock before re-throwing error
+    releaseVolumeLock $array
+    error $err
   }
-  SetVolume $volume $array
+  
+  # Release lock after successful operation
+  releaseVolumeLock $array
 }
 
 proc Udp { {verbose 0} } {
