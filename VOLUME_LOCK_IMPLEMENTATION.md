@@ -22,18 +22,17 @@ The implementation adds locking around the critical section of VolumeUp and Volu
 ## Technical Details
 
 ### Lock Files
-- Location: `/tmp/sonos2_volume_{IP_ADDRESS}.lock`
-- Per-player locking: Different Sonos players can be controlled concurrently
-- Timeout: 5 seconds (configurable)
-- Stale lock detection: Locks older than 10 seconds are automatically removed
+- **Location**: `/usr/local/etc/config/addons/www/sonos2/.locks/volume_{IP_ADDRESS}.lock`
+- **Per-player locking**: Different Sonos players can be controlled concurrently
+- **Timeout**: 2 seconds (reduced from 5 seconds for better responsiveness)
+- **Stale lock detection**: Locks older than 10 seconds are automatically removed
 
 ### Lock Acquisition
 The `acquireVolumeLock` function:
-1. Creates a unique lock file per Sonos player IP
-2. Attempts atomic file creation using EXCL flag (TCL 8.3+)
-3. Falls back to regular creation with mtime verification for older TCL versions
-4. Retries with 50ms intervals until timeout
-5. Returns 1 on success, 0 on timeout
+1. Creates a unique lock file per Sonos player IP in the addon's `.locks/` directory
+2. Uses simple file creation with proper error handling
+3. Retries with 100ms intervals until timeout
+4. Returns 1 on success, 0 on timeout
 
 ### Lock Release
 The `releaseVolumeLock` function:
@@ -44,6 +43,44 @@ The `releaseVolumeLock` function:
 - Locks are always released, even if errors occur during volume operations
 - If lock cannot be acquired within timeout, the operation is aborted and logged
 - No operation proceeds without acquiring the lock first
+
+## Recent Fixes (v2 - CCU3 Compatibility)
+
+### Issue 1: Permission Problems on CCU3
+**Problem**: Lock files in `/tmp` may have permission restrictions on CCU3 systems.
+
+**Solution**: Changed lock file location to the addon's own directory:
+- Old: `/tmp/sonos2_volume_{IP}.lock`
+- New: `/usr/local/etc/config/addons/www/sonos2/.locks/volume_{IP}.lock`
+
+### Issue 2: TCL Catch Block Bug
+**Problem**: Using `return` inside a catch block caused the catch to report an error (return code 1), making lock acquisition always fail.
+
+**Solution**: Changed to use a flag variable:
+```tcl
+# Old (broken):
+if {[catch {
+  set fd [open $lockfile w]
+  ...
+  return 1  # This causes catch to return 1 (error)
+}]} { ... }
+
+# New (fixed):
+set created 0
+if {[catch {
+  set fd [open $lockfile w]
+  ...
+  set created 1
+}] == 0 && $created} {
+  return 1
+}
+```
+
+### Issue 3: Compatibility and Performance
+**Changes**:
+- Switched from `clock clicks -milliseconds` to `clock seconds` for better TCL 8.2 compatibility
+- Reduced timeout from 5 seconds to 2 seconds for better responsiveness
+- Increased retry interval from 50ms to 100ms to reduce CPU usage
 
 ## Functions Added
 
