@@ -1865,7 +1865,7 @@ proc SetVolume {volume {array "sonosArray"}} {
   set xml "<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredVolume>$volume</DesiredVolume>"
   set response [getResponse /MediaRenderer/RenderingControl SetVolume $array $xml]
   if {[string match -nocase {HTTP/1.1 200 OK*} $response]} {
-    sonosSet Volume $volume $array]
+    sonosSet Volume $volume $array
     return "SetVolume to $volume okay" 
   } else {
     return "SetVolume mit Fehler beendet" 
@@ -1923,7 +1923,7 @@ proc GetMute { {array "sonosArray"}} {
 
 #/**
 # * Acquires a lock for volume operations to prevent race conditions
-# * Uses a simple atomic file creation approach compatible with TCL 8.2+
+# * Uses a simple file-based locking approach compatible with TCL 8.2+
 # * @param array - the sonos array (default "sonosArray")
 # * @param timeout - timeout in milliseconds (default 5000)
 # * @return 1 if lock acquired, 0 on timeout
@@ -1953,21 +1953,38 @@ proc acquireVolumeLock {{array "sonosArray"} {timeout 5000}} {
       }
     }
     
-    # Try to create lock file if it doesn't exist
+    # Try to create lock file atomically
+    # We attempt to open with EXCL flag for atomic creation
+    # If EXCL is not supported, fall back to non-atomic approach
     if {![file exists $lockfile]} {
-      # Attempt to create the lock file
-      set created 0
+      set acquired 0
+      # Try atomic creation with EXCL flag (TCL 8.3+)
       if {[catch {
-        set fd [open $lockfile w]
+        set fd [open $lockfile {WRONLY CREAT EXCL}]
         puts $fd "[pid] [clock seconds]"
         close $fd
-        set created 1
-      }] == 0 && $created} {
-        # Successfully created lock file, verify it still exists
-        after 10
-        if {[file exists $lockfile]} {
-          return 1
+        set acquired 1
+      }]} {
+        # EXCL not supported or file exists, try regular creation
+        if {[catch {
+          set fd [open $lockfile w]
+          puts $fd "[pid] [clock seconds]"
+          close $fd
+          # Verify we still own the lock by checking mtime is recent
+          after 10
+          if {[file exists $lockfile]} {
+            set mtime [file mtime $lockfile]
+            if {[expr {[clock seconds] - $mtime}] <= 1} {
+              set acquired 1
+            }
+          }
+        }]} {
+          # Failed to create lock file
         }
+      }
+      
+      if {$acquired} {
+        return 1
       }
     }
     
@@ -1990,11 +2007,17 @@ proc releaseVolumeLock {{array "sonosArray"}} {
   }
 }
 
-proc VolumeUp {{array "sonosArray"}} {
+#/**
+# * Helper function to execute volume operation with lock protection
+# * @param operation - The operation to perform (either "up" or "down")
+# * @param array - the sonos array (default "sonosArray")
+proc executeVolumeChangeWithLock {operation {array "sonosArray"}} {
   # Acquire lock before volume operation to prevent race conditions
-  if {![acquireVolumeLock $array]} {
-    # Failed to acquire lock, log and continue anyway to not block user
-    catch {log "VolumeUp: Failed to acquire lock for [sonosGet IP $array]"}
+  if {![acquireVolumeLock $array 5000]} {
+    # Failed to acquire lock after timeout
+    # Log the failure and return without executing to prevent race conditions
+    catch {log "Volume$operation: Failed to acquire lock for [sonosGet IP $array], operation aborted"}
+    return
   }
   
   # Ensure lock is released even if an error occurs
@@ -2004,11 +2027,22 @@ proc VolumeUp {{array "sonosArray"}} {
       puts [SetMute 0 $array]
     }
     set volume [GetVolume $array]
-    if { $volume < [expr {100 - $Cfg::volumeup}] } {
-      set volume [expr {$volume + $Cfg::volumeup}]
-    } {
-      set volume 100
+    
+    # Apply the volume change based on operation type
+    if {$operation == "Up"} {
+      if { $volume < [expr {100 - $Cfg::volumeup}] } {
+        set volume [expr {$volume + $Cfg::volumeup}]
+      } {
+        set volume 100
+      }
+    } elseif {$operation == "Down"} {
+      if { $volume > [expr {$Cfg::volumedown}] } {
+        set volume [expr {$volume - $Cfg::volumedown}]
+      } {
+        set volume 0
+      }
     }
+    
     SetVolume $volume $array
   } err]} {
     # Release lock before re-throwing error
@@ -2019,34 +2053,13 @@ proc VolumeUp {{array "sonosArray"}} {
   # Release lock after successful operation
   releaseVolumeLock $array
 }
+
+proc VolumeUp {{array "sonosArray"}} {
+  executeVolumeChangeWithLock "Up" $array
+}
+
 proc VolumeDown {{array "sonosArray"}} {
-  # Acquire lock before volume operation to prevent race conditions
-  if {![acquireVolumeLock $array]} {
-    # Failed to acquire lock, log and continue anyway to not block user
-    catch {log "VolumeDown: Failed to acquire lock for [sonosGet IP $array]"}
-  }
-  
-  # Ensure lock is released even if an error occurs
-  if {[catch {
-    set mute [GetMute $array]
-    if { $mute == "1"} {
-      puts [SetMute 0 $array]
-    }
-    set volume [GetVolume $array]
-    if { $volume > [expr {$Cfg::volumedown}] } {
-      set volume [expr {$volume - $Cfg::volumedown}]
-    } {
-      set volume 0
-    }
-    SetVolume $volume $array
-  } err]} {
-    # Release lock before re-throwing error
-    releaseVolumeLock $array
-    error $err
-  }
-  
-  # Release lock after successful operation
-  releaseVolumeLock $array
+  executeVolumeChangeWithLock "Down" $array
 }
 
 proc Udp { {verbose 0} } {
