@@ -31,6 +31,8 @@ proc url-decode str {
 set fconfig [file join [file dirname [info script]] settings/sonos.cfg]
 set flog sonos.log
 set bin [file join [file dirname [info script]] bin]
+# Global variable for lock directory - used by volume lock functions
+set ::sonos_lockdir [file join [file dirname [info script]] .locks]
 # namespace Config
 # read and write sonos.cfg
 
@@ -1933,12 +1935,22 @@ proc acquireVolumeLock {{array "sonosArray"} {timeout 5000}} {
     return 0
   }
   # Create lock file name based on IP to allow concurrent access to different players
-  set lockfile "/tmp/sonos2_volume_[string map {. _} $ip].lock"
+  # Use addon directory for lock files to avoid permission issues on CCU3
+  if {![file exists $::sonos_lockdir]} {
+    catch {file mkdir $::sonos_lockdir}
+  }
+  set lockfile [file join $::sonos_lockdir "volume_[string map {. _} $ip].lock"]
   
-  set start [clock clicks -milliseconds]
+  # Use clock seconds for timeout calculation (more reliable across TCL versions)
+  set start [clock seconds]
+  set timeout_sec [expr {$timeout / 1000}]
+  if {$timeout_sec < 1} { set timeout_sec 1 }
   
   # Try to acquire lock with timeout using file operations
-  while {[expr {[clock clicks -milliseconds] - $start}] < $timeout} {
+  set attempts 0
+  while {[expr {[clock seconds] - $start}] < $timeout_sec} {
+    incr attempts
+    
     # Check for stale locks first (older than 10 seconds)
     if {[file exists $lockfile]} {
       if {[catch {
@@ -1953,46 +1965,27 @@ proc acquireVolumeLock {{array "sonosArray"} {timeout 5000}} {
       }
     }
     
-    # Try to create lock file atomically
-    # We attempt to open with EXCL flag for atomic creation
-    # If EXCL is not supported, fall back to non-atomic approach
+    # Try to create lock file - use simpler approach that works reliably
     if {![file exists $lockfile]} {
-      set acquired 0
-      # Try atomic creation with EXCL flag (TCL 8.3+)
+      set created 0
       if {[catch {
-        set fd [open $lockfile {WRONLY CREAT EXCL}]
+        set fd [open $lockfile w]
         puts $fd "[pid] [clock seconds]"
+        flush $fd
         close $fd
-        set acquired 1
-      }]} {
-        # EXCL not supported or file exists, try regular creation
-        if {[catch {
-          set fd [open $lockfile w]
-          puts $fd "[pid] [clock seconds]"
-          close $fd
-          # Verify we still own the lock by checking mtime is recent
-          after 10
-          if {[file exists $lockfile]} {
-            set mtime [file mtime $lockfile]
-            if {[expr {[clock seconds] - $mtime}] <= 1} {
-              set acquired 1
-            }
-          }
-        }]} {
-          # Failed to create lock file
-        }
-      }
-      
-      if {$acquired} {
+        set created 1
+      }] == 0 && $created} {
+        # Successfully created lock file
         return 1
       }
     }
     
-    # Wait a bit before retry (50ms)
-    after 50
+    # Wait a bit before retry (reduce from 50ms to 100ms to reduce CPU usage)
+    after 100
   }
   
-  # Timeout reached
+  # Timeout reached - log the issue
+  catch {log "acquireVolumeLock: Failed to acquire lock for $ip after $attempts attempts"}
   return 0
 }
 
@@ -2002,7 +1995,7 @@ proc acquireVolumeLock {{array "sonosArray"} {timeout 5000}} {
 proc releaseVolumeLock {{array "sonosArray"}} {
   set ip [sonosGet IP $array]
   if {$ip != ""} {
-    set lockfile "/tmp/sonos2_volume_[string map {. _} $ip].lock"
+    set lockfile [file join $::sonos_lockdir "volume_[string map {. _} $ip].lock"]
     catch {file delete -force $lockfile}
   }
 }
@@ -2013,7 +2006,8 @@ proc releaseVolumeLock {{array "sonosArray"}} {
 # * @param array - the sonos array (default "sonosArray")
 proc executeVolumeChangeWithLock {operation {array "sonosArray"}} {
   # Acquire lock before volume operation to prevent race conditions
-  if {![acquireVolumeLock $array 5000]} {
+  # Use shorter timeout (2 seconds) to avoid blocking user operations too long
+  if {![acquireVolumeLock $array 2000]} {
     # Failed to acquire lock after timeout
     # Log the failure and return without executing to prevent race conditions
     catch {log "${operation} volume operation: Failed to acquire lock for [sonosGet IP $array], operation aborted"}
