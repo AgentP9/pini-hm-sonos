@@ -85,6 +85,8 @@ source [file join [file dirname [info script]] sonos2inc.tcl] ;# Include-File
 
 set message ""
 Cfg::Load
+# Load volume cache
+loadVolumeCache
 ######## Script Code #######################################################
 parseQuery
 if {[info exists args(zone)]} {
