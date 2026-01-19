@@ -15,3 +15,6 @@ tmp/
 
 # Backup files
 *.bak
+
+# Build artifacts
+src/newudp/newudp
