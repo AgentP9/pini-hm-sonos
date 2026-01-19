@@ -2083,6 +2083,7 @@ proc acquireVolumeLock {{array "sonosArray"} {timeout 5000}} {
 #/**
 # * Releases a volume lock
 # * @param array - the sonos array (default "sonosArray")
+#*/
 proc releaseVolumeLock {{array "sonosArray"}} {
   set ip [sonosGet IP $array]
   if {$ip != ""} {
@@ -2095,6 +2096,7 @@ proc releaseVolumeLock {{array "sonosArray"}} {
 # * Helper function to execute volume operation with lock protection
 # * @param operation - The operation to perform (either "up" or "down")
 # * @param array - the sonos array (default "sonosArray")
+#*/
 proc executeVolumeChangeWithLock {operation {array "sonosArray"}} {
   # Acquire lock before volume operation to prevent race conditions
   # Use shorter timeout (2 seconds) to avoid blocking user operations too long
