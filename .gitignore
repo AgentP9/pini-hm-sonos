@@ -12,3 +12,6 @@ www/*.log
 # Generated packages
 *.tar.gz
 tmp/
+
+# Backup files
+*.bak
