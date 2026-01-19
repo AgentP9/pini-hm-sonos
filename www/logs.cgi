@@ -33,6 +33,9 @@ if {[info exists args(tail)] && $args(tail) != 0 || [info exists args(getlogs)] 
         set tail 1
         if {[info exists args(lines)] && [string is integer $args(lines)]} {
             set lines $args(lines)
+            # Validate lines is within reasonable bounds
+            if {$lines < 1} { set lines 1 }
+            if {$lines > 10000} { set lines 10000 }
         }
     }
     
@@ -40,17 +43,17 @@ if {[info exists args(tail)] && $args(tail) != 0 || [info exists args(getlogs)] 
     set content ""
     if {[file exists $logfile]} {
         if {$tail} {
-            # Get last N lines
+            # Get last N lines - $lines is validated as integer above
             catch {
-                set fd [open "| tail -n $lines $logfile" r]
+                set fd [open "| tail -n $lines [list $logfile]" r]
                 fconfigure $fd -encoding utf-8
                 set content [read $fd]
                 close $fd
             }
         } else {
-            # Get entire file
+            # Get last 10000 lines max to prevent memory issues
             catch {
-                set fd [open $logfile r]
+                set fd [open "| tail -n 10000 [list $logfile]" r]
                 fconfigure $fd -encoding utf-8
                 set content [read $fd]
                 close $fd
