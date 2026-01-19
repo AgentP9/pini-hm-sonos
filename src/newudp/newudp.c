@@ -11,7 +11,7 @@
 
 #define BUF_SIZE 1024
 #define SERVER "239.255.255.250"
-#define PORT 1900   //The port on which to send data
+#define PORT 1900   /* The port on which to send data */
 #define TIMEOUT 5
 #define MAX_ERROR_MSG 0x1000
 
@@ -35,15 +35,12 @@ static int compile_regex (regex_t * r, const char * regex_text)
 
 static int match_regex (regex_t * r, const char * to_match)
 {
-    /* "P" is a pointer into the string which points to the end of the
-       previous match. */
-    const char * p = to_match;
     /* "N_matches" is the maximum number of matches allowed. */
     const int n_matches = 1;
     /* "M" contains the matches found. */
     regmatch_t m[n_matches];
 
-    int nomatch = regexec (r, p, n_matches, m, 0);
+    int nomatch = regexec (r, to_match, n_matches, m, 0);
     if (nomatch) {
         return 0;
     }
@@ -58,7 +55,9 @@ int main(int argc, const char * argv[]) {
     regex_t r;
     const char * regex_text;
     regex_text = "Sonos";
-    compile_regex(& r, regex_text);
+    if (compile_regex(& r, regex_text) != 0) {
+        return 1;
+    }
     socklen_t len = sizeof(struct sockaddr_in);
     char buf[BUF_SIZE];
     struct hostent *host;
@@ -74,7 +73,7 @@ int main(int argc, const char * argv[]) {
     
     
     /* initialize socket */
-    if ((s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
+    if ((s = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
         perror("socket");
         return 1;
     }
@@ -84,7 +83,9 @@ int main(int argc, const char * argv[]) {
     
     if (setsockopt (s, SOL_SOCKET, SO_SNDTIMEO, (char *)&timeout,
                     sizeof(timeout)) < 0)
-        perror("setsockopt failed\n");    struct sockaddr_in server;
+        perror("setsockopt failed\n");
+    
+    struct sockaddr_in server;
     
     /* initialize server addr */
     memset((char *) &server, 0, sizeof(struct sockaddr_in));
@@ -108,17 +109,17 @@ int main(int argc, const char * argv[]) {
          inet_ntoa(server.sin_addr),
          ntohs(server.sin_port)); */
         fflush(stdout);
-        if(write(1, buf, n) == -1 ||
-           write(1, "\n", 1) == -1)
+        if (write(1, buf, n) == -1 ||
+            write(1, "\n", 1) == -1)
         {
-          return 1;
+            return 1;
         }
 
         int i = match_regex(& r, buf);
-        if ( i) {
+        if (i) {
             regfree (& r);
             close(s);
-           return 0;
+            return 0;
         }
     }
     regfree (& r);
