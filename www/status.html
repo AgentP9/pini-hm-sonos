@@ -62,10 +62,10 @@
 <script type="text/javascript">
 
 // Variablen
-varUdpTimer = null;
-sonos = [];
-ip="";
-l=0;
+var varUdpTimer = null;
+var sonos = [];
+var ip="";
+var l=0;
 
 function udpCall() {
   var aj = getAjax();
@@ -75,7 +75,7 @@ function udpCall() {
   }
   aj = null;
   $(".se-pre-con").fadeIn("fast");
-  data = { udp : 1};
+  var data = { udp : 1};
   $.ajax({
       type:"POST",
       data: data, 
@@ -91,7 +91,7 @@ function udpCall() {
     
 }
 function udpRefresh() {
-  data = { udprefresh : 1};
+  var data = { udprefresh : 1};
   $.ajax({
       type:"POST",
       data: data, 
@@ -106,7 +106,7 @@ function udpRefresh() {
 
 function col1Click(t) {
    var sonosArray = sonos.split(",");
-  for (i = 0; i < l; i++) { 
+  for (var i = 0; i < l; i++) { 
     var id = sonosArray[++i].replace(/\./g,"_");
     $("#" + id).attr('class', 'bg-info');
   }
@@ -145,13 +145,13 @@ function setSonos(udp) {
   sonos = udp;
   var sonosArray = sonos.split(",");
   l = sonosArray.length;
-  text="<table class='table table-responsive table-bordered'><thead><tr><th>Räume</th><th>aktuell</th><th>Liste</th></tr></thead><tbody>";
-  for (i = 0; i < l; i++) { 
+  var text="<table class='table table-responsive table-bordered'><thead><tr><th>Räume</th><th>aktuell</th><th>Liste</th></tr></thead><tbody>";
+  for (var i = 0; i < l; i++) { 
     var bgclass = "bg-info";
-    name = sonosArray[i++];
+    var name = sonosArray[i++];
     if (i == 1 && ip == "")  ip = sonosArray[i];
     if (ip == sonosArray[i]) bgclass="bg-primary";
-    id = sonosArray[i].replace(/\./g,"_");
+    var id = sonosArray[i].replace(/\./g,"_");
     if (i == 1) {
       text += "<tr><td class='" + bgclass + "' id='" + id + "' onclick='col1Click(this);' width='33%'>" + name + 
         "</td><td id='col2' width='33%' rowspan='" + l/2 + "' class='bg-primary'><td width='33%' rowspan='" + l/2 + "' class='bg-primary' id='col3'></td></tr>";
@@ -167,7 +167,7 @@ function setSonos(udp) {
 }
 
 function log(text) {
-  data = { Logtext : text};
+  var data = { Logtext : text};
   if (arguments.length > 1) {
     data = { Logtext : text, append: 1}
   }
