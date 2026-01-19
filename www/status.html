@@ -169,7 +169,7 @@ function setSonos(udp) {
 function log(text) {
   var data = { Logtext : text};
   if (arguments.length > 1) {
-    data = { Logtext : text, append: 1}
+    data = { Logtext : text, append: 1};
   }
   $.ajax({
       type:"POST",
