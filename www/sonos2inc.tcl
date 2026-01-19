@@ -32,6 +32,8 @@ set fconfig [file join [file dirname [info script]] settings/sonos.cfg]
 set fvolumecache [file join [file dirname [info script]] settings/volume_cache.dat]
 set flog sonos.log
 set bin [file join [file dirname [info script]] bin]
+# Global variable for lock directory - used by volume lock functions
+set ::sonos_lockdir [file join [file dirname [info script]] .locks]
 # namespace Config
 # read and write sonos.cfg
 
@@ -1943,15 +1945,10 @@ proc SetVolume {volume {array "sonosArray"}} {
   } {
     set volume [sonosGet Volume $array]
   }
-  # Update cache immediately before API call to prevent race conditions
-  sonosSet Volume $volume $array
-  set ip [sonosGet IP $array]
-  if { $ip != "" } {
-    setCachedVolume $ip $volume
-  }
   set xml "<InstanceID>0</InstanceID><Channel>Master</Channel><DesiredVolume>$volume</DesiredVolume>"
   set response [getResponse /MediaRenderer/RenderingControl SetVolume $array $xml]
   if {[string match -nocase {HTTP/1.1 200 OK*} $response]} {
+    sonosSet Volume $volume $array
     return "SetVolume to $volume okay" 
   } else {
     return "SetVolume mit Fehler beendet" 
@@ -2017,67 +2014,139 @@ proc GetMute { {array "sonosArray"}} {
 
 }
 
-proc VolumeUp {{array "sonosArray"}} {
-  set mute [GetMute $array]
-  if { $mute == "1"} {
-    puts [SetMute 0 $array]
-  }
+#/**
+# * Acquires a lock for volume operations to prevent race conditions
+# * Uses a simple file-based locking approach compatible with TCL 8.2+
+# * @param array - the sonos array (default "sonosArray")
+# * @param timeout - timeout in milliseconds (default 5000)
+# * @return 1 if lock acquired, 0 on timeout
+proc acquireVolumeLock {{array "sonosArray"} {timeout 5000}} {
   set ip [sonosGet IP $array]
-  # Try to get persistent cached volume first
-  set volume ""
-  if { $ip != "" } {
-    set volume [getCachedVolume $ip]
+  if {$ip == ""} {
+    return 0
   }
-  # Fall back to in-memory cache if persistent cache is empty or expired
-  if { $volume == "" } {
-    set volume [sonosGet Volume $array]
+  # Create lock file name based on IP to allow concurrent access to different players
+  # Use addon directory for lock files to avoid permission issues on CCU3
+  if {![file exists $::sonos_lockdir]} {
+    catch {file mkdir $::sonos_lockdir}
   }
-  # Fall back to GetVolume if no cache available
-  if { $volume == "" } {
-    set volume [GetVolume $array]
+  set lockfile [file join $::sonos_lockdir "volume_[string map {. _} $ip].lock"]
+  
+  # Use clock seconds for timeout calculation (more reliable across TCL versions)
+  set start [clock seconds]
+  set timeout_sec [expr {$timeout / 1000}]
+  if {$timeout_sec < 1} { set timeout_sec 1 }
+  
+  # Try to acquire lock with timeout using file operations
+  set attempts 0
+  while {[expr {[clock seconds] - $start}] < $timeout_sec} {
+    incr attempts
+    
+    # Check for stale locks first (older than 10 seconds)
+    if {[file exists $lockfile]} {
+      if {[catch {
+        set mtime [file mtime $lockfile]
+        if {[expr {[clock seconds] - $mtime}] > 10} {
+          # Stale lock, remove it
+          file delete -force $lockfile
+        }
+      }]} {
+        # Error checking file, try to delete anyway
+        catch {file delete -force $lockfile}
+      }
+    }
+    
+    # Try to create lock file - use simpler approach that works reliably
+    if {![file exists $lockfile]} {
+      set created 0
+      if {[catch {
+        set fd [open $lockfile w]
+        puts $fd "[pid] [clock seconds]"
+        flush $fd
+        close $fd
+        set created 1
+      }] == 0 && $created} {
+        # Successfully created lock file
+        return 1
+      }
+    }
+    
+    # Wait a bit before retry (reduce from 50ms to 100ms to reduce CPU usage)
+    after 100
   }
-  # Validate that volume is a valid number, default to 0 if not
-  if { ![string is integer -strict $volume] || $volume < 0 || $volume > 100 } {
-    set volume 0
-  }
-  if { $volume < [expr {100 - $Cfg::volumeup}] } {
-    set volume [expr {$volume + $Cfg::volumeup}]
-  } {
-    set volume 100
-  }
-  # SetVolume will update both in-memory and persistent cache
-  SetVolume $volume $array
+  
+  # Timeout reached - log the issue
+  catch {log "acquireVolumeLock: Failed to acquire lock for $ip after $attempts attempts"}
+  return 0
 }
-proc VolumeDown {{array "sonosArray"}} {
-  set mute [GetMute $array]
-  if { $mute == "1"} {
-    puts [SetMute 0 $array]
-  }
+
+#/**
+# * Releases a volume lock
+# * @param array - the sonos array (default "sonosArray")
+#*/
+proc releaseVolumeLock {{array "sonosArray"}} {
   set ip [sonosGet IP $array]
-  # Try to get persistent cached volume first
-  set volume ""
-  if { $ip != "" } {
-    set volume [getCachedVolume $ip]
+  if {$ip != ""} {
+    set lockfile [file join $::sonos_lockdir "volume_[string map {. _} $ip].lock"]
+    catch {file delete -force $lockfile}
   }
-  # Fall back to in-memory cache if persistent cache is empty or expired
-  if { $volume == "" } {
-    set volume [sonosGet Volume $array]
+}
+
+#/**
+# * Helper function to execute volume operation with lock protection
+# * @param operation - The operation to perform (either "up" or "down")
+# * @param array - the sonos array (default "sonosArray")
+#*/
+proc executeVolumeChangeWithLock {operation {array "sonosArray"}} {
+  # Acquire lock before volume operation to prevent race conditions
+  # Use shorter timeout (2 seconds) to avoid blocking user operations too long
+  if {![acquireVolumeLock $array 2000]} {
+    # Failed to acquire lock after timeout
+    # Log the failure and return without executing to prevent race conditions
+    catch {log "${operation} volume operation: Failed to acquire lock for [sonosGet IP $array], operation aborted"}
+    return
   }
-  # Fall back to GetVolume if no cache available
-  if { $volume == "" } {
+  
+  # Ensure lock is released even if an error occurs
+  if {[catch {
+    set mute [GetMute $array]
+    if { $mute == "1"} {
+      puts [SetMute 0 $array]
+    }
     set volume [GetVolume $array]
+    
+    # Apply the volume change based on operation type
+    if {$operation == "Up"} {
+      if { $volume < [expr {100 - $Cfg::volumeup}] } {
+        set volume [expr {$volume + $Cfg::volumeup}]
+      } {
+        set volume 100
+      }
+    } elseif {$operation == "Down"} {
+      if { $volume > [expr {$Cfg::volumedown}] } {
+        set volume [expr {$volume - $Cfg::volumedown}]
+      } {
+        set volume 0
+      }
+    }
+    
+    SetVolume $volume $array
+  } err]} {
+    # Release lock before re-throwing error
+    releaseVolumeLock $array
+    error $err
   }
-  # Validate that volume is a valid number, default to 0 if not
-  if { ![string is integer -strict $volume] || $volume < 0 || $volume > 100 } {
-    set volume 0
-  }
-  if { $volume > [expr {$Cfg::volumedown}] } {
-    set volume [expr {$volume - $Cfg::volumedown}]
-  } {
-    set volume 0
-  }
-  # SetVolume will update both in-memory and persistent cache
-  SetVolume $volume $array
+  
+  # Release lock after successful operation
+  releaseVolumeLock $array
+}
+
+proc VolumeUp {{array "sonosArray"}} {
+  executeVolumeChangeWithLock "Up" $array
+}
+
+proc VolumeDown {{array "sonosArray"}} {
+  executeVolumeChangeWithLock "Down" $array
 }
 
 proc Udp { {verbose 0} } {
