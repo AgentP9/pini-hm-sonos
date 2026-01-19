@@ -7,7 +7,7 @@ if [ ! -f VERSION ]; then
 fi
 
 # Read version and validate it's not empty
-VERSION=$(cat VERSION | tr -d '\n\r')
+VERSION=$(tr -d '\n\r' < VERSION)
 if [ -z "$VERSION" ]; then
     echo "ERROR: VERSION file is empty"
     exit 1
@@ -16,7 +16,7 @@ fi
 echo "Building sonos2-addon-${VERSION}.tar.gz"
 
 tar=$(which gtar) # OSX gnu tar
-if [ -z $tar ]; then
+if [ -z "$tar" ]; then
     tar="tar"
 fi
 mkdir -p tmp
