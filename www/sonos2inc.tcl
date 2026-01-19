@@ -2016,7 +2016,7 @@ proc executeVolumeChangeWithLock {operation {array "sonosArray"}} {
   if {![acquireVolumeLock $array 5000]} {
     # Failed to acquire lock after timeout
     # Log the failure and return without executing to prevent race conditions
-    catch {log "Volume$operation: Failed to acquire lock for [sonosGet IP $array], operation aborted"}
+    catch {log "${operation} volume operation: Failed to acquire lock for [sonosGet IP $array], operation aborted"}
     return
   }
   
