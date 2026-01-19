@@ -1,4 +1,4 @@
-#!/usr/bin/env tclsh
+#!/bin/tclsh
 source [file join [file dirname [info script]] sonos2inc.tcl] ;# Include-File
 set info  [encoding convertfrom utf-8 [url-decode [ gets stdin ]]]
 regexp "(Logtext=.*)" $info dummy info

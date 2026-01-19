@@ -1,4 +1,4 @@
-#!/usr/bin/env tclsh
+#!/bin/tclsh
 source [file join [file dirname [info script]] ../sonos2inc.tcl] ;# Include-File
 Cfg::Load
 global ZoneGroupTopology
