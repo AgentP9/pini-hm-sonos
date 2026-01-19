@@ -1,4 +1,5 @@
-# Volume cache file (runtime data)
+# Runtime configuration files
+www/settings/sonos.cfg
 www/settings/volume_cache.dat
 
 # Log files
