@@ -29,6 +29,7 @@ proc url-decode str {
 
 
 set fconfig [file join [file dirname [info script]] settings/sonos.cfg]
+set fvolumecache [file join [file dirname [info script]] settings/volume_cache.dat]
 set flog sonos.log
 set bin [file join [file dirname [info script]] bin]
 # Global variable for lock directory - used by volume lock functions
@@ -252,6 +253,86 @@ set fd -1
     }
   }
 }
+
+# Volume cache procedures
+# Cache format: player_ip timestamp volume
+# timestamp is in seconds since epoch
+# Cache expires after 300 seconds (5 minutes) by default
+
+proc loadVolumeCache {} {
+  variable fvolumecache
+  global volumeCache
+  array set volumeCache {}
+  set content [loadFile $fvolumecache]
+  if { $content != "" } {
+    foreach line [split $content "\n"] {
+      set line [string trim $line]
+      if { $line != "" && ![string match "#*" $line] } {
+        if { [llength $line] == 3 } {
+          lassign $line ip timestamp volume
+          # Validate data types to prevent corrupt cache data
+          if { [string is integer -strict $timestamp] && 
+               [string is integer -strict $volume] && 
+               $volume >= 0 && $volume <= 100 } {
+            set volumeCache($ip,timestamp) $timestamp
+            set volumeCache($ip,volume) $volume
+          }
+        }
+      }
+    }
+  }
+}
+
+proc saveVolumeCache {} {
+  variable fvolumecache
+  global volumeCache
+  set fd -1
+  if { [catch {
+    set fd [open $fvolumecache w]
+    if { $fd > -1 } {
+      fconfigure $fd -encoding utf-8
+      puts $fd "# Volume cache for Sonos players"
+      puts $fd "# Format: player_ip timestamp volume"
+      foreach key [array names volumeCache "*,volume"] {
+        regexp {^(.*),volume$} $key dummy ip
+        if { [info exists volumeCache($ip,timestamp)] && [info exists volumeCache($ip,volume)] } {
+          puts $fd "$ip $volumeCache($ip,timestamp) $volumeCache($ip,volume)"
+        }
+      }
+    }
+  } err] } {
+    # Log error but don't fail the operation
+    catch { log "Error saving volume cache: $err" }
+  }
+  # Ensure file descriptor is closed even on error
+  if { $fd > -1 } {
+    catch { close $fd }
+  }
+}
+
+proc getCachedVolume {ip {maxAge 300}} {
+  global volumeCache
+  if { ![info exists volumeCache($ip,volume)] || ![info exists volumeCache($ip,timestamp)] } {
+    return ""
+  }
+  set now [clock seconds]
+  set age [expr {$now - $volumeCache($ip,timestamp)}]
+  if { $age >= $maxAge } {
+    # Cache expired - clean up expired entries to prevent memory accumulation
+    catch { unset volumeCache($ip,volume) }
+    catch { unset volumeCache($ip,timestamp) }
+    return ""
+  }
+  return $volumeCache($ip,volume)
+}
+
+proc setCachedVolume {ip volume} {
+  global volumeCache
+  set volumeCache($ip,timestamp) [clock seconds]
+  set volumeCache($ip,volume) $volume
+  saveVolumeCache
+}
+
 
 proc init { {message ""} } {
   #log $message
@@ -1878,10 +1959,20 @@ proc SetVolume {volume {array "sonosArray"}} {
 #/**
 # * Gets current volume information from player
 proc GetVolume {{array "sonosArray"}} {
+  set ip [sonosGet IP $array]
   set xml "<InstanceID>0</InstanceID><Channel>Master</Channel>"
   set response [getResponse /MediaRenderer/RenderingControl GetVolume $array $xml]
   if {[string match -nocase {HTTP/1.1 200 OK*} $response]} {
-    return [Xml::getXmlValue $response CurrentVolume]
+    set volume [Xml::getXmlValue $response CurrentVolume]
+    # Cache the retrieved volume to prevent stale reads
+    if {[string is integer -strict $volume] && $volume >= 0 && $volume <= 100} {
+      sonosSet Volume $volume $array
+      # Also save to persistent cache
+      if { $ip != "" } {
+        setCachedVolume $ip $volume
+      }
+    }
+    return $volume
   } else {
     return "GetVolume mit Fehler beendet" 
   }

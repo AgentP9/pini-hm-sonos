@@ -1,0 +1,17 @@
+# Volume cache file (runtime data)
+www/settings/volume_cache.dat
+
+# Log files
+www/sonos.log
+www/*.log
+
+# Temporary files
+*.tmp
+*~
+
+# Generated packages
+*.tar.gz
+tmp/
+
+# Backup files
+*.bak
