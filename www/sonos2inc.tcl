@@ -1927,11 +1927,8 @@ proc VolumeUp {{array "sonosArray"}} {
   if { $mute == "1"} {
     puts [SetMute 0 $array]
   }
-  # Try to get cached volume first, fall back to GetVolume if not available
-  set volume [sonosGet Volume $array]
-  if { $volume == "" } {
-    set volume [GetVolume $array]
-  }
+  # Always get current volume from device to ensure accurate increment
+  set volume [GetVolume $array]
   if { $volume < [expr {100 - $Cfg::volumeup}] } {
     set volume [expr {$volume + $Cfg::volumeup}]
   } {
@@ -1946,11 +1943,8 @@ proc VolumeDown {{array "sonosArray"}} {
   if { $mute == "1"} {
     puts [SetMute 0 $array]
   }
-  # Try to get cached volume first, fall back to GetVolume if not available
-  set volume [sonosGet Volume $array]
-  if { $volume == "" } {
-    set volume [GetVolume $array]
-  }
+  # Always get current volume from device to ensure accurate decrement
+  set volume [GetVolume $array]
   if { $volume > [expr {$Cfg::volumedown}] } {
     set volume [expr {$volume - $Cfg::volumedown}]
   } {

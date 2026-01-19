@@ -236,12 +236,6 @@ if {[info exists args(zone)]} {
             toggle {
                Toggle
             }
-            volumedown {
-               VolumeDown
-            }
-            volumedown {
-               VolumeDown
-            }
             udp {
                set Cfg::sonoszone [Udp]
                Cfg::Save
@@ -313,11 +307,7 @@ if {[info exists args(action)]} {
       previous -
       settrack -
       rewind -
-      stop -
-      stop -
       toggle -
-      volumedown -
-      volumedown -
       udp -
       info {
          if {[info exists args(info)]} {
