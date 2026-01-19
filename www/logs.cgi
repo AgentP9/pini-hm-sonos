@@ -1,11 +1,25 @@
 #!/usr/bin/env tclsh
 source [file join [file dirname [info script]] sonos2inc.tcl] ;# Include-File
 
-# Parse query parameters
-parseQuery
+# Parse query parameters - but avoid the url-decode which writes to log
+global args env
+set args(tail) 0
+set args(getlogs) 0
+set args(lines) 100
+
+if { [info exists env(QUERY_STRING)] } {
+    set query $env(QUERY_STRING)
+    foreach item [split $query &] {
+        if { [regexp {([^=]+)=(.+)} $item dummy key value] } {
+            set args($key) $value
+        } elseif { [regexp {([^=]+)} $item dummy key] } {
+            set args($key) 1
+        }
+    }
+}
 
 # Check if this is a request for the HTML page or log content
-if {[info exists args(tail)] || [info exists args(getlogs)]} {
+if {[info exists args(tail)] && $args(tail) != 0 || [info exists args(getlogs)] && $args(getlogs) != 0} {
     # Return log content
     puts "Content-type:text/plain\n"
     
@@ -15,7 +29,7 @@ if {[info exists args(tail)] || [info exists args(getlogs)]} {
     # Check if we're getting full log or just tail
     set lines 100
     set tail 0
-    if {[info exists args(tail)]} {
+    if {[info exists args(tail)] && $args(tail) != 0} {
         set tail 1
         if {[info exists args(lines)] && [string is integer $args(lines)]} {
             set lines $args(lines)
@@ -54,6 +68,7 @@ if {[info exists args(tail)] || [info exists args(getlogs)]} {
     # Return HTML page
     set content [loadFile logs.html]
     set zone ""
+    parseQuery
     if [info exists args(zone)] {
         if {$args(zone) != "" && $args(zone) != "fehlt"} { set zone "?zone=$args(zone)"}
     }
