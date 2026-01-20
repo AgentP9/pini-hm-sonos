@@ -101,18 +101,12 @@ This creates `sonos2-addon-{VERSION}.tar.gz` in the repository root.
 
 The current version is stored in the `VERSION` file and is automatically included in the build.
 
-## Contributing
+## Acknowledgments
 
-Contributions to this project are welcome! This repository is part of the HomeMatic community ecosystem. 
-
-For bug reports, feature requests, and contributions, please visit the main community repository:
+This project is based on and inspired by the excellent work of the HomeMatic community project:
 **[https://github.com/homematic-community/hm-sonos](https://github.com/homematic-community/hm-sonos)**
 
-When contributing, please:
-- Check existing issues and pull requests before creating new ones
-- Follow the existing code style and conventions
-- Test your changes on supported CCU platforms when possible
-- Provide clear descriptions of changes and their purpose
+We greatly appreciate the efforts of the original developers and contributors who created and maintain the upstream project.
 
 ## Technical Details
 
