@@ -108,6 +108,8 @@ This project is based on and inspired by the excellent work of the HomeMatic com
 
 We greatly appreciate the efforts of the original developers and contributors who created and maintain the upstream project.
 
+Special thanks to **GitHub Copilot** for assistance in solving challenges with the HmIP-WRCR implementation and helping to understand the codebase.
+
 ## Technical Details
 
 For detailed technical documentation about the volume lock implementation, see [VOLUME_LOCK_IMPLEMENTATION.md](VOLUME_LOCK_IMPLEMENTATION.md).
