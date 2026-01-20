@@ -18,7 +18,7 @@ This repository hosts the development of a HomeMatic CCU addon that enables your
 
 ## Installation
 
-1. Download the latest addon release from [GitHub Releases](https://github.com/homematic-community/hm-sonos/releases)
+1. Download the latest addon release from [GitHub Releases]((https://github.com/AgentP9/pini-hm-sonos/releases))
 2. In your HomeMatic WebUI, navigate to **Settings** → **Control Panel** → **Additional Software**
 3. Click **Install** and upload the downloaded `.tar.gz` file
 4. After installation, the CCU will reboot automatically
@@ -83,7 +83,7 @@ The addon is compatible with TCL 8.2+ and has been tested on:
 ## Support
 
 If you encounter any problems or have ideas for enhancements, please:
-- Create an issue at the [GitHub issue tracker](https://github.com/homematic-community/hm-sonos/issues)
+- Create an issue at the [GitHub issue tracker](https://github.com/AgentP9/pini-hm-sonos/issues)
 - Join the German-speaking discussion forum: [HomeMatic Forum](http://homematic-forum.de/forum/viewtopic.php?f=41&t=26531)
 
 ## Development
@@ -122,4 +122,4 @@ The Sonos CCU Addon as published in this GitHub repository is provided under the
 
 * **fiveyears**: Main developer of the addon
 * **Jens Maus**: Build environment and ports to CCU1 and RaspberryMatic platform
-* **Community contributors**: Various improvements and bug fixes
+* **AgentP9** / **GitHub Copilot**: Various improvements and bug fixes
