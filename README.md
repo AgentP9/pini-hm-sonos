@@ -1,83 +1,116 @@
 # HomeMatic Sonos Player Addon
 
-![Version](https://img.shields.io/badge/version-3.0.7-blue.svg)
-![License](https://img.shields.io/badge/license-GPL-green.svg)
-
-A HomeMatic CCU addon for controlling Sonos audio players directly from your smart home system. This addon enables seamless integration between HomeMatic CCU devices and Sonos speakers, allowing you to control playback, volume, and more through the WebUI interface.
+This repository hosts the development of a HomeMatic CCU addon that enables your CCU to control Sonos audio players (www.sonos.com) directly from the WebUI user interface.
 
 ## Features
 
-- **Sonos Device Discovery**: Automatic discovery of Sonos players on your network
-- **Playback Control**: Play, pause, stop, next/previous track
-- **Volume Management**: Control volume with race condition protection for smooth operation
-- **Group Management**: Control Sonos groups and zones
-- **WebUI Integration**: Easy-to-use web interface for configuration and control
-- **Multiple Platform Support**: Works across all HomeMatic CCU platforms
+- **Full Sonos Control**: Play, pause, skip, volume control, and playlist management
+- **Volume Lock Mechanism**: Prevents race conditions during rapid volume changes (e.g., when using HmIP-WRCR wheel controls)
+- **Multi-Zone Support**: Control multiple Sonos players independently
+- **WebUI Integration**: Seamless integration with HomeMatic's web interface
+- **Stable Operation**: File-based locking ensures reliable concurrent operations
 
 ## Supported CCU Models
 
-* [HomeMatic CCU3](https://www.eq-3.de/produkte/homematic/zentralen-und-gateways/smart-home-zentrale-ccu3.html)
-* [RaspberryMatic](http://raspberrymatic.de/)
+* [HomeMatic CCU3](https://www.eq-3.de/produkte/homematic/zentralen-und-gateways/smart-home-zentrale-ccu3.html) / [RaspberryMatic](http://raspberrymatic.de/)
 * [HomeMatic CCU2](https://www.eq-3.de/produkt-detail-zentralen-und-gateways/items/homematic-zentrale-ccu-2.html)
 * HomeMatic CCU1
 
 ## Installation
 
-1. Download the latest addon release from the [releases page](https://github.com/AgentP9/pini-hm-sonos/releases)
-2. Log in to your HomeMatic WebUI
-3. Navigate to System Settings → Control Panel → Additional Software
-4. Click "Install" and upload the downloaded `.tar.gz` file
-5. After installation, configure the Sonos Player Addon through the WebUI
+1. Download the latest addon release from [GitHub Releases](https://github.com/homematic-community/hm-sonos/releases)
+2. In your HomeMatic WebUI, navigate to **Settings** → **Control Panel** → **Additional Software**
+3. Click **Install** and upload the downloaded `.tar.gz` file
+4. After installation, the CCU will reboot automatically
+5. Configure your Sonos players in the addon settings
 
 ## Configuration
 
-1. After installation, navigate to the Sonos Player Addon settings
-2. The addon will automatically discover Sonos players on your network
-3. Configure player names and preferences as needed
-4. Save your configuration
+After installation, configure the addon through the WebUI:
 
-## Development
+1. Navigate to the **Sonos** section in your HomeMatic WebUI
+2. Add your Sonos player IP addresses
+3. Configure default volume settings
+4. Set up message storage location for announcements
 
-### Building from Source
+## Volume Lock Implementation
 
-The addon uses a Makefile-based build system with platform-specific builds:
+The addon includes a sophisticated file-based locking mechanism that prevents race conditions when multiple instances try to change the volume simultaneously (e.g., during rapid wheel rotations on HmIP-WRCR devices).
 
+### How It Works
+
+- **Per-player locking**: Each Sonos player has its own lock file, allowing concurrent control of different players
+- **Lock location**: `/usr/local/etc/config/addons/www/sonos2/.locks/volume_{IP_ADDRESS}.lock`
+- **Timeout**: 2 seconds with automatic retry
+- **Stale lock cleanup**: Locks older than 10 seconds are automatically removed
+- **Minimal overhead**: Adds only 10-50ms per volume operation
+
+### What Problem Does It Solve?
+
+Previously, rapid volume changes could result in lost updates because multiple CGI instances would:
+1. Read the same current volume
+2. Calculate new volume independently
+3. Overwrite each other's changes
+
+The lock mechanism ensures that volume operations are serialized per player, preventing any lost updates.
+
+## Troubleshooting
+
+### Check Logs
+Log files are stored in the addon directory. Check `sonos.log` for operational messages and errors:
 ```bash
-# Build for all platforms
-make
-
-# Build for specific platform
-make ccu3    # For CCU3/RaspberryMatic
-make ccu2    # For CCU2
-make ccu1    # For CCU1
+cat /usr/local/etc/config/addons/www/sonos2/sonos.log
 ```
 
-### Project Structure
+### Volume Lock Issues
+If you experience problems with volume changes, check for stale lock files:
+```bash
+ls -la /usr/local/etc/config/addons/www/sonos2/.locks/
+```
 
-- `src/newudp/` - UDP discovery tool for finding Sonos devices
-- `sonos2/` - Main addon scripts and configuration
-- `www/` - Web interface and CGI scripts
-- `rc.d/` - Init scripts for addon startup
+Lock files are automatically cleaned up, but you can manually remove them if needed:
+```bash
+rm -f /usr/local/etc/config/addons/www/sonos2/.locks/volume_*.lock
+```
+
+### Compatibility
+The addon is compatible with TCL 8.2+ and has been tested on:
+- CCU1 (TCL 8.2)
+- CCU2 (TCL 8.4)
+- CCU3 (TCL 8.6)
+- RaspberryMatic (various TCL versions)
 
 ## Support
 
-- **Issues**: For bug reports and feature requests, please create an issue in the [issue tracker](https://github.com/AgentP9/pini-hm-sonos/issues)
-- **Forum**: Join the German-speaking discussion at [HomeMatic Forum](http://homematic-forum.de/forum/viewtopic.php?f=41&t=26531)
+If you encounter any problems or have ideas for enhancements, please:
+- Create an issue at the [GitHub issue tracker](https://github.com/homematic-community/hm-sonos/issues)
+- Join the German-speaking discussion forum: [HomeMatic Forum](http://homematic-forum.de/forum/viewtopic.php?f=41&t=26531)
 
-## Technical Documentation
+## Development
 
-- [Volume Lock Implementation](VOLUME_LOCK_IMPLEMENTATION.md) - Details on the race condition prevention mechanism
+### Building the Addon
+
+To build the addon package, run:
+```bash
+./generate_img.sh
+```
+
+This creates `sonos2-addon-{VERSION}.tar.gz` in the repository root.
+
+### Version Information
+
+The current version is stored in the `VERSION` file and is automatically included in the build.
+
+## Technical Details
+
+For detailed technical documentation about the volume lock implementation, see [VOLUME_LOCK_IMPLEMENTATION.md](VOLUME_LOCK_IMPLEMENTATION.md).
 
 ## License
 
-This project is licensed under the GPL License. See the LICENSE file for details.
+The Sonos CCU Addon as published in this GitHub repository is provided under the GPL license.
 
 ## Authors
 
-* **fiveyears** - Main developer
-* **Jens Maus** - Build environment and CCU1/RaspberryMatic ports
-* **AgentP9** - Current maintainer
-
-## Acknowledgments
-
-Special thanks to the HomeMatic community and Sonos for their excellent products that make this integration possible.
+* **fiveyears**: Main developer of the addon
+* **Jens Maus**: Build environment and ports to CCU1 and RaspberryMatic platform
+* **Community contributors**: Various improvements and bug fixes
