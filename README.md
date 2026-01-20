@@ -101,6 +101,19 @@ This creates `sonos2-addon-{VERSION}.tar.gz` in the repository root.
 
 The current version is stored in the `VERSION` file and is automatically included in the build.
 
+## Contributing
+
+Contributions to this project are welcome! This repository is part of the HomeMatic community ecosystem. 
+
+For bug reports, feature requests, and contributions, please visit the main community repository:
+**[https://github.com/homematic-community/hm-sonos](https://github.com/homematic-community/hm-sonos)**
+
+When contributing, please:
+- Check existing issues and pull requests before creating new ones
+- Follow the existing code style and conventions
+- Test your changes on supported CCU platforms when possible
+- Provide clear descriptions of changes and their purpose
+
 ## Technical Details
 
 For detailed technical documentation about the volume lock implementation, see [VOLUME_LOCK_IMPLEMENTATION.md](VOLUME_LOCK_IMPLEMENTATION.md).
